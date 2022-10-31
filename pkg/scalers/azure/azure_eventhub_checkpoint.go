@@ -231,6 +231,10 @@ func getCheckpoint(ctx context.Context, httpClient util.HTTPDoer, info EventHubI
 		podIdentity.Provider = kedav1alpha1.PodIdentityProviderNone
 	}
 
+	if len(info.CheckpointIdentityId) != 0 {
+		podIdentity.IdentityID = info.CheckpointIdentityId
+	}
+
 	if podIdentity.Provider == kedav1alpha1.PodIdentityProviderAzure || podIdentity.Provider == kedav1alpha1.PodIdentityProviderAzureWorkload {
 		if len(info.StorageAccountName) == 0 {
 			return Checkpoint{}, fmt.Errorf("storageAccountName not supplied when PodIdentity authentication is enabled")
