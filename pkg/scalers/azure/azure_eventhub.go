@@ -18,6 +18,7 @@ type EventHubInfo struct {
 	EventHubConnection       string
 	EventHubConsumerGroup    string
 	StorageConnection        string
+	// +optional
 	StorageAccountName       string
 	BlobStorageEndpoint      string
 	BlobContainer            string
@@ -27,6 +28,8 @@ type EventHubInfo struct {
 	ServiceBusEndpointSuffix string
 	ActiveDirectoryEndpoint  string
 	EventHubResourceURL      string
+	// +optional
+	CheckpointIdentityId     string
 	PodIdentity              kedav1alpha1.AuthPodIdentity
 }
 

@@ -210,6 +210,12 @@ func parseAzureEventHubAuthenticationMetadata(logger logr.Logger, config *Scaler
 			logger.Info("no 'storageAccountName' provided to enable identity based authentication to Blob Storage. Attempting to use connection string instead")
 		}
 
+		if val, ok := config.TriggerMetadata["CheckpointIdentity"]; ok {
+			meta.eventHubInfo.CheckpointIdentityId = val
+		} else {
+			logger.Info("no 'CheckpointIdentityId' supplied to enable identity based authentication to Blob Storage. Using Pod Identity or connection string instead if no 'storageAccountName' supplied")
+		}
+
 		if len(meta.eventHubInfo.StorageAccountName) != 0 {
 			storageEndpointSuffixProvider := func(env az.Environment) (string, error) {
 				return env.StorageEndpointSuffix, nil
