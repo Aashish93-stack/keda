@@ -102,8 +102,8 @@ var parseEventHubMetadataDatasetWithPodIdentity = []parseEventHubMetadataTestDat
 	{map[string]string{"cloud": "private", "storageAccountName": "blobstorage", "consumerGroup": eventHubConsumerGroup, "unprocessedEventThreshold": "15", "eventHubName": testEventHubName, "eventHubNamespace": testEventHubNamespace}, true},
 	// properly formed event hub metadata with Pod Identity and no storage connection string, private cloud and storageEndpointSuffix
 	{map[string]string{"cloud": "private", "endpointSuffix": serviceBusEndpointSuffix, "activeDirectoryEndpoint": activeDirectoryEndpoint, "eventHubResourceURL": eventHubResourceURL, "storageAccountName": "aStorageAccount", "storageEndpointSuffix": storageEndpointSuffix, "consumerGroup": eventHubConsumerGroup, "unprocessedEventThreshold": "15", "eventHubName": testEventHubName, "eventHubNamespace": testEventHubNamespace}, false},
-	// properly formed event hub metadata with checkpointIdentity
-	{map[string]string{"storageAccountName": "blobstorage", "consumerGroup": eventHubConsumerGroup, "unprocessedEventThreshold": "15", "eventHubName": testEventHubName, "eventHubNamespace": testEventHubNamespace, "CheckpointIdentityId": checkpointIdentityId}, false},
+	// properly formed event hub metadata with checkpointIdentityId
+	{map[string]string{"storageAccountName": "blobstorage", "consumerGroup": eventHubConsumerGroup, "unprocessedEventThreshold": "15", "eventHubName": testEventHubName, "eventHubNamespace": testEventHubNamespace, "checkpointIdentityId": checkpointIdentityId}, false},
 }
 
 var eventHubMetricIdentifiers = []eventHubMetricIdentifier{
