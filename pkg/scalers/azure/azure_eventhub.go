@@ -29,7 +29,9 @@ type EventHubInfo struct {
 	ActiveDirectoryEndpoint  string
 	EventHubResourceURL      string
 	// +optional
-	CheckpointIdentityId     string
+	CheckpointIdentityID     string
+	// +optional
+	CheckpointTenantID       string
 	PodIdentity              kedav1alpha1.AuthPodIdentity
 }
 
@@ -70,7 +72,7 @@ func GetEventHubClient(ctx context.Context, info EventHubInfo) (*eventhub.Hub, e
 		// User wants to use AAD Workload Identity
 		env := azure.Environment{ActiveDirectoryEndpoint: info.ActiveDirectoryEndpoint, ServiceBusEndpointSuffix: info.ServiceBusEndpointSuffix}
 		hubEnvOptions := eventhub.HubWithEnvironment(env)
-		provider := NewAzureADWorkloadIdentityTokenProvider(ctx, info.PodIdentity.IdentityID, info.EventHubResourceURL)
+		provider := NewAzureADWorkloadIdentityTokenProvider(ctx, info.PodIdentity.IdentityID, info.PodIdentity.TenantID, info.EventHubResourceURL)
 
 		return eventhub.NewHub(info.Namespace, info.EventHubName, provider, hubEnvOptions)
 	}

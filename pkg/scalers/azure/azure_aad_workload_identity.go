@@ -46,7 +46,7 @@ const (
 )
 
 // GetAzureADWorkloadIdentityToken returns the AADToken for resource
-func GetAzureADWorkloadIdentityToken(ctx context.Context, identityID, resource string) (AADToken, error) {
+func GetAzureADWorkloadIdentityToken(ctx context.Context, identityID, providedTenantID, resource string) (AADToken, error) {
 	clientID := os.Getenv(azureClientIDEnv)
 	tenantID := os.Getenv(azureTenantIDEnv)
 	tokenFilePath := os.Getenv(azureFederatedTokenFileEnv)
@@ -54,6 +54,10 @@ func GetAzureADWorkloadIdentityToken(ctx context.Context, identityID, resource s
 
 	if identityID != "" {
 		clientID = identityID
+	}
+
+	if providedTenantID != "" {
+		tenantID = providedTenantID
 	}
 
 	signedAssertion, err := readJWTFromFileSystem(tokenFilePath)
@@ -113,6 +117,7 @@ func getScopedResource(resource string) string {
 type ADWorkloadIdentityConfig struct {
 	ctx        context.Context
 	IdentityID string
+	TenantID   string
 	Resource   string
 }
 
@@ -123,7 +128,7 @@ func NewAzureADWorkloadIdentityConfig(ctx context.Context, identityID, resource 
 // Authorizer implements the auth.AuthorizerConfig interface
 func (aadWiConfig ADWorkloadIdentityConfig) Authorizer() (autorest.Authorizer, error) {
 	return autorest.NewBearerAuthorizer(NewAzureADWorkloadIdentityTokenProvider(
-		aadWiConfig.ctx, aadWiConfig.IdentityID, aadWiConfig.Resource)), nil
+		aadWiConfig.ctx, aadWiConfig.IdentityID, aadWiConfig.TenantID, aadWiConfig.Resource)), nil
 }
 
 // ADWorkloadIdentityCredential is a type that implements the TokenCredential interface.
@@ -132,6 +137,8 @@ func (aadWiConfig ADWorkloadIdentityConfig) Authorizer() (autorest.Authorizer, e
 type ADWorkloadIdentityCredential struct {
 	ctx        context.Context
 	IdentityID string
+	// +optional
+	TenantID   string
 	Resource   string
 	aadToken   AADToken
 }
@@ -145,7 +152,7 @@ func (wiCredential *ADWorkloadIdentityCredential) refresh() error {
 		return nil
 	}
 
-	aadToken, err := GetAzureADWorkloadIdentityToken(wiCredential.ctx, wiCredential.IdentityID, wiCredential.Resource)
+	aadToken, err := GetAzureADWorkloadIdentityToken(wiCredential.ctx, wiCredential.IdentityID, wiCredential.TenantID, wiCredential.Resource)
 	if err != nil {
 		return err
 	}
@@ -174,12 +181,13 @@ func (wiCredential *ADWorkloadIdentityCredential) GetToken(ctx context.Context, 
 type ADWorkloadIdentityTokenProvider struct {
 	ctx        context.Context
 	IdentityID string
+	TenantId   string
 	Resource   string
 	aadToken   AADToken
 }
 
-func NewAzureADWorkloadIdentityTokenProvider(ctx context.Context, identityID, resource string) *ADWorkloadIdentityTokenProvider {
-	return &ADWorkloadIdentityTokenProvider{ctx: ctx, IdentityID: identityID, Resource: resource}
+func NewAzureADWorkloadIdentityTokenProvider(ctx context.Context, identityID, tenantId, resource string) *ADWorkloadIdentityTokenProvider {
+	return &ADWorkloadIdentityTokenProvider{ctx: ctx, IdentityID: identityID, TenantId: tenantId, Resource: resource}
 }
 
 // OAuthToken is for implementing the adal.OAuthTokenProvider interface. It returns the current access token.
@@ -193,7 +201,7 @@ func (wiTokenProvider *ADWorkloadIdentityTokenProvider) Refresh() error {
 		return nil
 	}
 
-	aadToken, err := GetAzureADWorkloadIdentityToken(wiTokenProvider.ctx, wiTokenProvider.IdentityID, wiTokenProvider.Resource)
+	aadToken, err := GetAzureADWorkloadIdentityToken(wiTokenProvider.ctx, wiTokenProvider.IdentityID, wiTokenProvider.TenantId, wiTokenProvider.Resource)
 	if err != nil {
 		return err
 	}
