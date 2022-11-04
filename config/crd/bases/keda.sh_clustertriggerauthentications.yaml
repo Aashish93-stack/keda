@@ -190,6 +190,8 @@ spec:
                   provider:
                     description: PodIdentityProvider contains the list of providers
                     type: string
+                  tenantId:
+                    type: string
                 required:
                 - provider
                 type: object

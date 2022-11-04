@@ -210,10 +210,16 @@ func parseAzureEventHubAuthenticationMetadata(logger logr.Logger, config *Scaler
 			logger.Info("no 'storageAccountName' provided to enable identity based authentication to Blob Storage. Attempting to use connection string instead")
 		}
 
-		if val, ok := config.TriggerMetadata["checkpointIdentityId"]; ok {
-			meta.eventHubInfo.CheckpointIdentityId = val
+		if val, ok := config.TriggerMetadata["checkpointIdentityID"]; ok {
+			meta.eventHubInfo.CheckpointIdentityID = val
 		} else {
 			logger.Info("no 'CheckpointIdentityId' supplied to enable identity based authentication to Blob Storage. Using Pod Identity or connection string instead if no 'storageAccountName' supplied")
+		}
+
+		if val, ok := config.TriggerMetadata["checkpointTenantID"]; ok {
+			meta.eventHubInfo.CheckpointTenantID = val
+		} else {
+			logger.Info("no 'CheckpointTenantID' supplied to enable identity based authentication to Blob Storage. Using Default TenantId configured in the storage account instead")
 		}
 
 		if len(meta.eventHubInfo.StorageAccountName) != 0 {
