@@ -114,11 +114,11 @@ const (
 // AuthPodIdentity allows users to select the platform native identity
 // mechanism
 type AuthPodIdentity struct {
-	Provider   PodIdentityProvider `json:"provider"`
+	Provider PodIdentityProvider `json:"provider"`
 	// +optional
 	IdentityID string `json:"identityId"`
 	// +optional
-	TenantID   string `json:"tenantId"`
+	TenantID string `json:"tenantId"`
 }
 
 // AuthSecretTargetRef is used to authenticate using a reference to a secret

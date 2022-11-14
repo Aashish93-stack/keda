@@ -77,7 +77,7 @@ func NewAzureEventHubScaler(ctx context.Context, config *ScalerConfig) (Scaler, 
 		return nil, fmt.Errorf("unable to get eventhub metadata: %s", err)
 	}
 
-	hub, err := azure.GetEventHubClient(ctx, parsedMetadata.eventHubInfo)
+	hub, err := azure.GetEventHubClient(logger, ctx, parsedMetadata.eventHubInfo)
 	if err != nil {
 		return nil, fmt.Errorf("unable to get eventhub client: %s", err)
 	}
@@ -189,18 +189,25 @@ func parseAzureEventHubAuthenticationMetadata(logger logr.Logger, config *Scaler
 
 	switch config.PodIdentity.Provider {
 	case "", v1alpha1.PodIdentityProviderNone:
-		if len(meta.eventHubInfo.StorageConnection) == 0 {
-			return fmt.Errorf("no storage connection string given")
-		}
+		if certValue, ok := config.AuthParams["secretCertRef"]; ok {
+			meta.eventHubInfo.Certificate = certValue
+			if privateKeyVal, ok := config.AuthParams["secretKeyRef"]; ok {
+				meta.eventHubInfo.PrivateKey = privateKeyVal
+			}
+		} else {
+			if len(meta.eventHubInfo.StorageConnection) == 0 {
+				return fmt.Errorf("no storage connection string given")
+			}
 
-		if config.AuthParams["connection"] != "" {
-			meta.eventHubInfo.EventHubConnection = config.AuthParams["connection"]
-		} else if config.TriggerMetadata["connectionFromEnv"] != "" {
-			meta.eventHubInfo.EventHubConnection = config.ResolvedEnv[config.TriggerMetadata["connectionFromEnv"]]
-		}
+			if config.AuthParams["connection"] != "" {
+				meta.eventHubInfo.EventHubConnection = config.AuthParams["connection"]
+			} else if config.TriggerMetadata["connectionFromEnv"] != "" {
+				meta.eventHubInfo.EventHubConnection = config.ResolvedEnv[config.TriggerMetadata["connectionFromEnv"]]
+			}
 
-		if len(meta.eventHubInfo.EventHubConnection) == 0 {
-			return fmt.Errorf("no event hub connection string given")
+			if len(meta.eventHubInfo.EventHubConnection) == 0 {
+				return fmt.Errorf("no event hub connection string given")
+			}
 		}
 	case v1alpha1.PodIdentityProviderAzure, v1alpha1.PodIdentityProviderAzureWorkload:
 		meta.eventHubInfo.StorageAccountName = ""
