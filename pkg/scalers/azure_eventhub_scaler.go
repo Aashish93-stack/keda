@@ -77,7 +77,7 @@ func NewAzureEventHubScaler(ctx context.Context, config *ScalerConfig) (Scaler, 
 		return nil, fmt.Errorf("unable to get eventhub metadata: %s", err)
 	}
 
-	hub, err := azure.GetEventHubClient(ctx, parsedMetadata.eventHubInfo)
+	hub, err := azure.GetEventHubClient(logger, ctx, parsedMetadata.eventHubInfo)
 	if err != nil {
 		return nil, fmt.Errorf("unable to get eventhub client: %s", err)
 	}
@@ -202,12 +202,18 @@ func parseAzureEventHubAuthenticationMetadata(logger logr.Logger, config *Scaler
 		if len(meta.eventHubInfo.EventHubConnection) == 0 {
 			return fmt.Errorf("no event hub connection string given")
 		}
-	case v1alpha1.PodIdentityProviderAzure, v1alpha1.PodIdentityProviderAzureWorkload:
+	case v1alpha1.PodIdentityProviderAzure, v1alpha1.PodIdentityProviderAzureWorkload, v1alpha1.PodIdentityProviderAzureServicePrincipal:
 		meta.eventHubInfo.StorageAccountName = ""
 		if val, ok := config.TriggerMetadata["storageAccountName"]; ok {
 			meta.eventHubInfo.StorageAccountName = val
 		} else {
 			logger.Info("no 'storageAccountName' provided to enable identity based authentication to Blob Storage. Attempting to use connection string instead")
+		}
+
+		if val, ok := config.AuthParams["secretCertRef"]; ok {
+			meta.eventHubInfo.Certificate = val
+		} else if config.PodIdentity.Provider == v1alpha1.PodIdentityProviderAzureServicePrincipal {
+			return fmt.Errorf("no certificate secret reference provided for certificate based authentication")
 		}
 
 		if val, ok := config.TriggerMetadata["checkpointIdentityID"]; ok {

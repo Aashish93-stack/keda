@@ -138,9 +138,9 @@ type ADWorkloadIdentityCredential struct {
 	ctx        context.Context
 	IdentityID string
 	// +optional
-	TenantID   string
-	Resource   string
-	aadToken   AADToken
+	TenantID string
+	Resource string
+	aadToken AADToken
 }
 
 func NewADWorkloadIdentityCredential(ctx context.Context, identityID, resource string) *ADWorkloadIdentityCredential {
