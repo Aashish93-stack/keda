@@ -169,6 +169,13 @@ func resolveAuthRef(ctx context.Context, client client.Client, logger logr.Logge
 		} else {
 			if triggerAuthSpec.PodIdentity != nil {
 				podIdentity = *triggerAuthSpec.PodIdentity
+
+				// If PodIdentity is of type Azure ServicePrincipal, then the certificate needs to be passed as a kubernetes secret ref
+				if triggerAuthSpec.PodIdentity.SecretTargetRef != nil {
+					for _, e := range triggerAuthSpec.PodIdentity.SecretTargetRef {
+						result[e.Parameter] = resolveAuthSecret(ctx, client, logger, e.Name, triggerNamespace, e.Key)
+					}
+				}
 			}
 			if triggerAuthSpec.Env != nil {
 				for _, e := range triggerAuthSpec.Env {
@@ -465,11 +472,6 @@ func resolveAuthSecret(ctx context.Context, client client.Client, logger logr.Lo
 		return ""
 	}
 	result := secret.Data[key]
-
-	if result == nil {
-		return ""
-	}
-
 	return string(result)
 }
 

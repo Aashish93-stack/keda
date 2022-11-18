@@ -189,32 +189,31 @@ func parseAzureEventHubAuthenticationMetadata(logger logr.Logger, config *Scaler
 
 	switch config.PodIdentity.Provider {
 	case "", v1alpha1.PodIdentityProviderNone:
-		if certValue, ok := config.AuthParams["secretCertRef"]; ok {
-			meta.eventHubInfo.Certificate = certValue
-			if privateKeyVal, ok := config.AuthParams["secretKeyRef"]; ok {
-				meta.eventHubInfo.PrivateKey = privateKeyVal
-			}
-		} else {
-			if len(meta.eventHubInfo.StorageConnection) == 0 {
-				return fmt.Errorf("no storage connection string given")
-			}
-
-			if config.AuthParams["connection"] != "" {
-				meta.eventHubInfo.EventHubConnection = config.AuthParams["connection"]
-			} else if config.TriggerMetadata["connectionFromEnv"] != "" {
-				meta.eventHubInfo.EventHubConnection = config.ResolvedEnv[config.TriggerMetadata["connectionFromEnv"]]
-			}
-
-			if len(meta.eventHubInfo.EventHubConnection) == 0 {
-				return fmt.Errorf("no event hub connection string given")
-			}
+		if len(meta.eventHubInfo.StorageConnection) == 0 {
+			return fmt.Errorf("no storage connection string given")
 		}
-	case v1alpha1.PodIdentityProviderAzure, v1alpha1.PodIdentityProviderAzureWorkload:
+
+		if config.AuthParams["connection"] != "" {
+			meta.eventHubInfo.EventHubConnection = config.AuthParams["connection"]
+		} else if config.TriggerMetadata["connectionFromEnv"] != "" {
+			meta.eventHubInfo.EventHubConnection = config.ResolvedEnv[config.TriggerMetadata["connectionFromEnv"]]
+		}
+
+		if len(meta.eventHubInfo.EventHubConnection) == 0 {
+			return fmt.Errorf("no event hub connection string given")
+		}
+	case v1alpha1.PodIdentityProviderAzure, v1alpha1.PodIdentityProviderAzureWorkload, v1alpha1.PodIdentityProviderAzureServicePrincipal:
 		meta.eventHubInfo.StorageAccountName = ""
 		if val, ok := config.TriggerMetadata["storageAccountName"]; ok {
 			meta.eventHubInfo.StorageAccountName = val
 		} else {
 			logger.Info("no 'storageAccountName' provided to enable identity based authentication to Blob Storage. Attempting to use connection string instead")
+		}
+
+		if val, ok := config.AuthParams["secretCertRef"]; ok {
+			meta.eventHubInfo.Certificate = val
+		} else if config.PodIdentity.Provider == v1alpha1.PodIdentityProviderAzureServicePrincipal {
+			return fmt.Errorf("no certificate secret reference provided for certificate based authentication")
 		}
 
 		if val, ok := config.TriggerMetadata["checkpointIdentityID"]; ok {
