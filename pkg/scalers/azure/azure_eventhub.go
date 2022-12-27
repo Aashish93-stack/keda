@@ -2,22 +2,27 @@ package azure
 
 import (
 	"context"
+	"crypto/rsa"
+	"crypto/x509"
+	"encoding/pem"
 	"errors"
 	"fmt"
 	"strings"
 
 	"github.com/Azure/azure-amqp-common-go/v3/aad"
 	eventhub "github.com/Azure/azure-event-hubs-go/v3"
+	"github.com/Azure/go-autorest/autorest/adal"
 	"github.com/Azure/go-autorest/autorest/azure"
+	"github.com/go-logr/logr"
 
 	kedav1alpha1 "github.com/kedacore/keda/v2/apis/keda/v1alpha1"
 )
 
 // EventHubInfo to keep event hub connection and resources
 type EventHubInfo struct {
-	EventHubConnection       string
-	EventHubConsumerGroup    string
-	StorageConnection        string
+	EventHubConnection    string
+	EventHubConsumerGroup string
+	StorageConnection     string
 	// +optional
 	StorageAccountName       string
 	BlobStorageEndpoint      string
@@ -29,10 +34,12 @@ type EventHubInfo struct {
 	ActiveDirectoryEndpoint  string
 	EventHubResourceURL      string
 	// +optional
-	CheckpointIdentityID     string
+	CheckpointIdentityID string
 	// +optional
-	CheckpointTenantID       string
-	PodIdentity              kedav1alpha1.AuthPodIdentity
+	CheckpointTenantID string
+	PodIdentity        kedav1alpha1.AuthPodIdentity
+	// +optional
+	Certificate string
 }
 
 const (
@@ -40,7 +47,7 @@ const (
 )
 
 // GetEventHubClient returns eventhub client
-func GetEventHubClient(ctx context.Context, info EventHubInfo) (*eventhub.Hub, error) {
+func GetEventHubClient(logger logr.Logger, ctx context.Context, info EventHubInfo) (*eventhub.Hub, error) {
 	switch info.PodIdentity.Provider {
 	case "", kedav1alpha1.PodIdentityProviderNone:
 		// The user wants to use a connectionstring, not a pod identity
@@ -49,6 +56,50 @@ func GetEventHubClient(ctx context.Context, info EventHubInfo) (*eventhub.Hub, e
 			return nil, fmt.Errorf("failed to create hub client: %s", err)
 		}
 		return hub, nil
+	case kedav1alpha1.PodIdentityProviderAzureServicePrincipal:
+		env := azure.Environment{ActiveDirectoryEndpoint: info.ActiveDirectoryEndpoint, ServiceBusEndpointSuffix: info.ServiceBusEndpointSuffix}
+		hubEnvOptions := eventhub.HubWithEnvironment(env)
+
+		envJWTProviderOption := aad.JWTProviderWithAzureEnvironment(&env)
+		resourceURLJWTProviderOption := aad.JWTProviderWithResourceURI(info.EventHubResourceURL)
+		oauthConfig, _ := adal.NewOAuthConfig(info.ActiveDirectoryEndpoint, info.PodIdentity.TenantID)
+		certificate, privateKey, err := LoadCertAndKeyFromSecret([]byte(info.Certificate))
+
+		if err != nil {
+			return nil, fmt.Errorf("unable to load certificate %v", err)
+		}
+		servicePrincipalToken, err := adal.NewServicePrincipalTokenFromCertificate(*oauthConfig, info.PodIdentity.ClientID, certificate, privateKey, info.EventHubResourceURL)
+
+		if err != nil {
+			return nil, fmt.Errorf("failed to get oauth token from certificate auth: %v", err)
+		}
+
+		aadFuncOption := aad.JWTProviderWithAADToken(servicePrincipalToken)
+		clientIDJWTProviderOption := func(config *aad.TokenProviderConfiguration) error {
+			config.TenantID = info.PodIdentity.TenantID
+			config.ClientID = info.PodIdentity.ClientID
+			config.Env = &env
+			return nil
+		}
+
+		provider, aadErr := aad.NewJWTProvider(envJWTProviderOption, resourceURLJWTProviderOption, clientIDJWTProviderOption, aadFuncOption)
+
+		if aadErr != nil {
+			return nil, fmt.Errorf("failed to get refresh oauth token from certificate auth: %v", err)
+		}
+
+		if aadErr == nil {
+			token, err := provider.GetToken(info.PodIdentity.Audience) // dummy change this
+			if err != nil {
+				logger.Error(err, "unable to get eventhub client")
+			}
+			logger.Info("Token retrieved from AAD: %s", token)
+
+			return eventhub.NewHub(info.Namespace, info.EventHubName, provider, hubEnvOptions)
+		}
+
+		return nil, aadErr
+
 	case kedav1alpha1.PodIdentityProviderAzure:
 		env := azure.Environment{ActiveDirectoryEndpoint: info.ActiveDirectoryEndpoint, ServiceBusEndpointSuffix: info.ServiceBusEndpointSuffix}
 		hubEnvOptions := eventhub.HubWithEnvironment(env)
@@ -78,6 +129,47 @@ func GetEventHubClient(ctx context.Context, info EventHubInfo) (*eventhub.Hub, e
 	}
 
 	return nil, fmt.Errorf("event hub does not support pod identity %v", info.PodIdentity)
+}
+
+// LoadCertAndKeyFromSecret takes the encoded PEM and tries to extract the Certificate and Private Key
+func LoadCertAndKeyFromSecret(pemBytes []byte) (*x509.Certificate, *rsa.PrivateKey, error) {
+	var certificate *x509.Certificate
+	var privateKey *rsa.PrivateKey
+	for len(pemBytes) > 0 {
+		data, block := pem.Decode(pemBytes)
+		if block == nil {
+			return nil, nil, fmt.Errorf("no certificate or private key block found")
+		}
+		if data.Type == "CERTIFICATE" {
+			var err error
+			certificate, err = x509.ParseCertificate(data.Bytes)
+			if err != nil {
+				return nil, nil, fmt.Errorf("error while decoding certificate %v", err)
+			}
+			if privateKey != nil {
+				break
+			}
+		}
+		if data.Type == "PRIVATE KEY" {
+			var err error
+			anypk, err := x509.ParsePKCS8PrivateKey(data.Bytes)
+			if err == nil {
+				switch key := anypk.(type) {
+				case *rsa.PrivateKey:
+					privateKey = key
+				default:
+					return nil, nil, fmt.Errorf("found unknown private key type in pkcs#8 wrapping")
+				}
+			}
+			if err != nil {
+				return nil, nil, fmt.Errorf("malformed private key detected %v", err)
+			}
+
+		}
+		pemBytes = block
+	}
+
+	return certificate, privateKey, nil
 }
 
 // ParseAzureEventHubConnectionString parses Event Hub connection string into (namespace, name)
